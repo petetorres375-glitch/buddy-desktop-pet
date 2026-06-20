@@ -22,7 +22,7 @@ from PIL import Image
 ASSETS     = Path(__file__).parent.parent / "assets"
 FRAMES_DIR = ASSETS / "frames"
 
-SPRITE_SIZE   = 125
+SPRITE_SIZE   = 150
 BED_SIZE      = 130
 SPEED         = 2.5
 TICK_MS       = 30
