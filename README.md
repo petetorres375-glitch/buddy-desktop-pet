@@ -1,6 +1,7 @@
 # Buddy Desktop Pet
 
-*In memory of Buddy — a good cat, gone too soon. June 18, 2026.*
+*In memory of Buddy — a good cat, gone too soon.*
+*Born September 3, 2018 · Passed June 18, 2026*
 
 ---
 
