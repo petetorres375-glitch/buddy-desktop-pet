@@ -70,18 +70,51 @@ FRAMES = {
     ],
 }
 
+# Rows from top/bottom of each crop containing label text.
+# Only dark pixels in these zones are erased — colored cat pixels (ears, paws) are kept.
+LABEL_TOP_ROWS = {
+    "idle":    30,
+    "walk":    32,
+    "sleep":   25,
+    "jump":    32,
+    "sit":     32,
+    "play":    32,
+    "meow":    32,
+    "stretch": 32,
+}
+LABEL_BOTTOM_ROWS = {
+    "idle":    30,
+    "walk":    12,
+    "sleep":   30,
+    "jump":    20,
+    "sit":     30,
+    "play":    30,
+    "meow":    30,
+    "stretch": 30,
+}
+
 ANIM_ORDER = ["idle", "walk", "sleep", "jump", "sit", "play", "meow", "stretch"]
 
 
-def remove_background(img: Image.Image) -> Image.Image:
-    """Replace light-blue and dark-blue grid colors with transparency."""
+def remove_background(img: Image.Image, top_rows: int = 0, bottom_rows: int = 0) -> Image.Image:
+    """Replace light-blue background and label text with transparency."""
     arr = np.array(img.convert("RGBA"), dtype=float)
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    h = arr.shape[0]
     light_blue  = (b > r + 25) & (b > g + 8) & (g > 120) & (b > 170)
     dark_blue   = (r < 100) & (g < 150) & (b > 100) & (b > r + 40)
-    # bright cyan cell-border highlights (r~220, g=255, b=255) where b≈g so b>g+8 fails
     cell_border = (g > 240) & (b > 240) & (b >= g.astype(int) - 5) & (r < 240)
-    arr[:, :, 3] = np.where(light_blue | dark_blue | cell_border, 0, 255)
+    mask = light_blue | dark_blue | cell_border
+    dark_text = (r < 100) & (g < 100) & (b < 100)
+    if top_rows > 0:
+        zone = np.zeros(arr.shape[:2], dtype=bool)
+        zone[:top_rows, :] = True
+        mask |= zone & dark_text
+    if bottom_rows > 0:
+        zone = np.zeros(arr.shape[:2], dtype=bool)
+        zone[h - bottom_rows:, :] = True
+        mask |= zone & dark_text
+    arr[:, :, 3] = np.where(mask, 0, 255)
     return Image.fromarray(arr.astype(np.uint8), "RGBA")
 
 
@@ -112,7 +145,9 @@ for anim in ANIM_ORDER:
     extracted[anim] = []
     for i, (x1, y1, x2, y2) in enumerate(FRAMES[anim]):
         cell = src.crop((x1, y1, x2, y2))
-        cell = remove_background(cell)
+        cell = remove_background(cell,
+                                 top_rows=LABEL_TOP_ROWS.get(anim, 0),
+                                 bottom_rows=LABEL_BOTTOM_ROWS.get(anim, 0))
         cell = tight_crop(cell)
         cell = fit_to_cell(cell, CELL_SIZE)
         out  = OUT_DIR / f"{anim}_{i}.png"

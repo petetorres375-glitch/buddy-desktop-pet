@@ -44,18 +44,20 @@ DUR = {
     "jump":      (800,  800),
     "wander":    (1200, 2500),
     "play":      (2000, 4000),
+    "nap":       (8000, 20000),
     "sleeping":  (30000, 60000),
 }
 
 NEXT = {
-    "idle":     ["idle", "sit", "sit_left", "meow", "stretch", "jump", "wander", "play", "to_bed"],
-    "sit":      ["idle", "idle", "sit_left", "stretch", "meow", "wander", "play"],
-    "sit_left": ["idle", "idle", "sit", "stretch", "meow", "wander", "play"],
-    "stretch":  ["idle", "sit", "wander"],
+    "idle":     ["idle", "sit", "sit_left", "meow", "stretch", "jump", "wander", "play", "nap", "to_bed"],
+    "sit":      ["idle", "idle", "sit_left", "stretch", "meow", "wander", "play", "nap"],
+    "sit_left": ["idle", "idle", "sit", "stretch", "meow", "wander", "play", "nap"],
+    "stretch":  ["idle", "sit", "wander", "nap"],
     "meow":     ["idle"],
     "jump":     ["idle", "play"],
     "wander":   ["idle", "sit", "sit_left"],
     "play":     ["idle", "sit", "jump"],
+    "nap":      ["idle", "sit", "stretch"],
     "sleeping": ["idle"],
     "to_bed":   ["sleeping"],
 }
@@ -273,6 +275,7 @@ class BuddyWindow(Gtk.Window):
             "to_bed":   ANIM_WALK_MS,
             "jump":     120,
             "sleeping": ANIM_SLOW_MS,
+            "nap":      ANIM_SLOW_MS,
             "sit":      ANIM_SLOW_MS,
             "sit_left": ANIM_SLOW_MS,
             "stretch":  ANIM_SLOW_MS,
@@ -285,8 +288,8 @@ class BuddyWindow(Gtk.Window):
             frames = self._current_frames()
             self.anim_frame = (self.anim_frame + 1) % len(frames)
 
-        # purr when mouse is nearby (but not during meow/sleeping)
-        if self.state not in ("meow", "sleeping"):
+        # purr when mouse is nearby (but not during meow/sleeping/nap)
+        if self.state not in ("meow", "sleeping", "nap"):
             _win, mx, my, _ = Gdk.get_default_root_window().get_pointer()
             dist_to_mouse = math.hypot(mx - self.cat_x, my - self.cat_y)
             if dist_to_mouse < PURR_RADIUS:
@@ -300,7 +303,7 @@ class BuddyWindow(Gtk.Window):
         return True
 
     def _current_frames(self):
-        if self.state == "sleeping": return ANIMS["sleep"]
+        if self.state in ("sleeping", "nap"): return ANIMS["sleep"]
         if self.state == "meow":     return ANIMS["meow"]
         if self.state == "sit":      return ANIMS["sit"]
         if self.state == "sit_left": return ANIMS["sit_left"]
@@ -324,7 +327,7 @@ class BuddyWindow(Gtk.Window):
 
     def _on_click(self, widget, event):
         if event.button == 1:
-            if self.state == "sleeping":
+            if self.state in ("sleeping", "nap"):
                 self._enter("idle")
             else:
                 self._enter("meow")
