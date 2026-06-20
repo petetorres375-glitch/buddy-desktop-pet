@@ -22,33 +22,40 @@ from PIL import Image
 ASSETS     = Path(__file__).parent.parent / "assets"
 FRAMES_DIR = ASSETS / "frames"
 
-SPRITE_SIZE  = 125
-BED_SIZE     = 90
-SPEED        = 2.5
-TICK_MS      = 30
-ANIM_IDLE_MS = 220
-ANIM_WALK_MS = 90
-ANIM_SLOW_MS = 350
-BED_MARGIN   = 40
-EDGE_MARGIN  = 60
+SPRITE_SIZE   = 125
+BED_SIZE      = 90
+SPEED         = 2.5
+TICK_MS       = 30
+ANIM_IDLE_MS  = 220
+ANIM_WALK_MS  = 90
+ANIM_SLOW_MS  = 350
+BED_MARGIN    = 40
+EDGE_MARGIN   = 60
+HOME_RADIUS   = 150   # Buddy stays within this many px of his bed
 
 DUR = {
-    "idle":      (3000, 7000),
-    "sit":       (3000, 6000),
+    "idle":      (3000, 6000),
+    "sit":       (2000, 5000),
     "sit_left":  (2000, 5000),
-    "stretch":   (2000, 3000),
+    "stretch":   (1500, 3000),
     "meow":      (700,  700),
+    "jump":      (800,  800),
+    "wander":    (1200, 2500),
+    "play":      (2000, 4000),
     "sleeping":  (30000, 60000),
 }
 
 NEXT = {
-    "idle":      ["idle", "idle", "sit", "sit_left", "meow", "stretch", "to_bed"],
-    "sit":       ["idle", "idle", "sit_left", "stretch", "meow"],
-    "sit_left":  ["idle", "idle", "sit", "stretch", "meow"],
-    "stretch":   ["idle", "sit"],
-    "meow":      ["idle"],
-    "sleeping":  ["idle"],
-    "to_bed":    ["sleeping"],
+    "idle":     ["idle", "sit", "sit_left", "meow", "stretch", "jump", "wander", "play", "to_bed"],
+    "sit":      ["idle", "idle", "sit_left", "stretch", "meow", "wander", "play"],
+    "sit_left": ["idle", "idle", "sit", "stretch", "meow", "wander", "play"],
+    "stretch":  ["idle", "sit", "wander"],
+    "meow":     ["idle"],
+    "jump":     ["idle", "play"],
+    "wander":   ["idle", "sit", "sit_left"],
+    "play":     ["idle", "sit", "jump"],
+    "sleeping": ["idle"],
+    "to_bed":   ["sleeping"],
 }
 
 
@@ -74,9 +81,12 @@ ANIMS = {
     "sit":     load_anim("sit",     4),
     "meow":    load_anim("meow",    2),
     "stretch": load_anim("stretch", 3),
+    "jump":    load_anim("jump",    4),
+    "play":    load_anim("play",    3),
 }
 ANIMS["walk_left"] = [pb.flip(True) for pb in ANIMS["walk"]]
 ANIMS["sit_left"]  = [pb.flip(True) for pb in ANIMS["sit"]]
+ANIMS["play_left"] = [pb.flip(True) for pb in ANIMS["play"]]
 
 pygame.mixer.init()
 purr_sound = meow_sound = None
@@ -155,17 +165,20 @@ class BuddyWindow(Gtk.Window):
         self.set_keep_above(True)
         self.set_resizable(False)
 
-        self.cat_x = float(mon_x + mon_w // 2)
-        self.cat_y = float(mon_y + mon_h // 2)
+        # start near the bed
+        self.cat_x = float(bed.bed_cx - 60)
+        self.cat_y = float(bed.bed_cy - 60)
 
         self.anim_frame   = 0
         self.anim_ms      = 0
         self.facing_right = True
 
-        self.state      = "idle"
-        self.state_ms   = 0
-        self.state_dur  = self._random_dur("idle")
-        self.walk_angle = 0.0
+        self.state        = "idle"
+        self.state_ms     = 0
+        self.state_dur    = self._random_dur("idle")
+        self.walk_angle   = 0.0
+        self.wander_tx    = self.cat_x
+        self.wander_ty    = self.cat_y
 
         self.win_w = SPRITE_SIZE + 20
         self.win_h = SPRITE_SIZE + 20
@@ -207,12 +220,21 @@ class BuddyWindow(Gtk.Window):
         if new_state in ("idle", "sit", "sit_left", "stretch"):
             purr_for(3000)
         elif new_state == "sleeping":
-            purr_for(4000)   # gentle settling-in purr, then quiet
+            purr_for(4000)
         elif new_state == "to_bed":
             stop_purr()
             self.state_dur = 999999
         elif new_state == "meow":
             play_meow()
+        elif new_state == "wander":
+            stop_purr()
+            angle = random.uniform(0, 2 * math.pi)
+            dist  = random.uniform(40, HOME_RADIUS)
+            self.wander_tx = self.bed.bed_cx + math.cos(angle) * dist
+            self.wander_ty = self.bed.bed_cy + math.sin(angle) * dist
+        elif new_state == "play":
+            stop_purr()
+            self.facing_right = random.choice([True, False])
 
     def _walk_toward(self, tx: float, ty: float) -> float:
         dx, dy = tx - self.cat_x, ty - self.cat_y
@@ -240,7 +262,11 @@ class BuddyWindow(Gtk.Window):
     def _tick(self):
         self.state_ms += TICK_MS
 
-        if self.state == "to_bed":
+        if self.state == "wander":
+            if self._walk_toward(self.wander_tx, self.wander_ty) < 10:
+                self._enter(self._pick_next())
+
+        elif self.state == "to_bed":
             if self._walk_toward(self.bed.bed_cx, self.bed.bed_cy) < 45:
                 self._enter("sleeping")
 
@@ -248,11 +274,14 @@ class BuddyWindow(Gtk.Window):
             self._enter(self._pick_next())
 
         ms_per_frame = {
+            "wander":   ANIM_WALK_MS,
             "to_bed":   ANIM_WALK_MS,
+            "jump":     120,
             "sleeping": ANIM_SLOW_MS,
             "sit":      ANIM_SLOW_MS,
             "sit_left": ANIM_SLOW_MS,
             "stretch":  ANIM_SLOW_MS,
+            "play":     450,
         }.get(self.state, ANIM_IDLE_MS)
 
         self.anim_ms += TICK_MS
@@ -262,6 +291,8 @@ class BuddyWindow(Gtk.Window):
             self.anim_frame = (self.anim_frame + 1) % len(frames)
 
         self.drawing_area.queue_draw()
+        if self.get_window():
+            self.get_window().raise_()
         return True
 
     def _current_frames(self):
@@ -270,7 +301,10 @@ class BuddyWindow(Gtk.Window):
         if self.state == "sit":      return ANIMS["sit"]
         if self.state == "sit_left": return ANIMS["sit_left"]
         if self.state == "stretch":  return ANIMS["stretch"]
-        if self.state == "to_bed":
+        if self.state == "jump":     return ANIMS["jump"]
+        if self.state == "play":
+            return ANIMS["play"]
+        if self.state in ("wander", "to_bed"):
             return ANIMS["walk"] if self.facing_right else ANIMS["walk_left"]
         return ANIMS["idle"]
 
