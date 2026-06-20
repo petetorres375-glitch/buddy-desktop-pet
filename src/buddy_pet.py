@@ -29,9 +29,11 @@ TICK_MS       = 30
 ANIM_IDLE_MS  = 220
 ANIM_WALK_MS  = 90
 ANIM_SLOW_MS  = 350
-BED_MARGIN    = 40
+BED_MARGIN_X  = 120   # from right edge
+BED_MARGIN_Y  = 20    # from bottom edge
 EDGE_MARGIN   = 60
 HOME_RADIUS   = 150   # Buddy stays within this many px of his bed
+PURR_RADIUS   = 200   # mouse within this many px → Buddy purrs
 
 DUR = {
     "idle":      (3000, 6000),
@@ -129,8 +131,8 @@ class BedWindow(Gtk.Window):
         self.set_resizable(False)
         pb = load_pixbuf(ASSETS / "bed.png", BED_SIZE)
         w, h = pb.get_width(), pb.get_height()
-        bx = mon_x + mon_w - BED_MARGIN - w
-        by = mon_y + mon_h - BED_MARGIN - h
+        bx = mon_x + mon_w - BED_MARGIN_X - w
+        by = mon_y + mon_h - BED_MARGIN_Y - h
         self.bed_cx = float(bx + w // 2)
         self.bed_cy = float(by + h // 2)
         self.set_default_size(w, h)
@@ -217,23 +219,16 @@ class BuddyWindow(Gtk.Window):
         self.anim_frame = 0
         self.anim_ms    = 0
 
-        if new_state in ("idle", "sit", "sit_left", "stretch"):
-            purr_for(3000)
-        elif new_state == "sleeping":
-            purr_for(4000)
-        elif new_state == "to_bed":
-            stop_purr()
+        if new_state == "to_bed":
             self.state_dur = 999999
         elif new_state == "meow":
             play_meow()
         elif new_state == "wander":
-            stop_purr()
             angle = random.uniform(0, 2 * math.pi)
             dist  = random.uniform(40, HOME_RADIUS)
             self.wander_tx = self.bed.bed_cx + math.cos(angle) * dist
             self.wander_ty = self.bed.bed_cy + math.sin(angle) * dist
         elif new_state == "play":
-            stop_purr()
             self.facing_right = random.choice([True, False])
 
     def _walk_toward(self, tx: float, ty: float) -> float:
@@ -289,6 +284,15 @@ class BuddyWindow(Gtk.Window):
             self.anim_ms = 0
             frames = self._current_frames()
             self.anim_frame = (self.anim_frame + 1) % len(frames)
+
+        # purr when mouse is nearby (but not during meow/sleeping)
+        if self.state not in ("meow", "sleeping"):
+            _win, mx, my, _ = Gdk.get_default_root_window().get_pointer()
+            dist_to_mouse = math.hypot(mx - self.cat_x, my - self.cat_y)
+            if dist_to_mouse < PURR_RADIUS:
+                start_purr()
+            else:
+                stop_purr()
 
         self.drawing_area.queue_draw()
         if self.get_window():
