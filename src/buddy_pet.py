@@ -23,7 +23,7 @@ ASSETS     = Path(__file__).parent.parent / "assets"
 FRAMES_DIR = ASSETS / "frames"
 
 SPRITE_SIZE   = 125
-BED_SIZE      = 90
+BED_SIZE      = 130
 SPEED         = 2.5
 TICK_MS       = 30
 ANIM_IDLE_MS  = 220
