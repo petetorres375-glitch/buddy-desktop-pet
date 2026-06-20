@@ -14,7 +14,7 @@ just like he always did.
 Buddy lives in the bottom-right corner of your screen. He sits, stretches, meows, plays,
 takes little strolls, and puts himself to bed. Fully transparent, always on top.
 
-![Buddy](assets/buddy_idle_cartoon.png)
+![Buddy](assets/buddy_real.jpg)
 
 ## Features
 
