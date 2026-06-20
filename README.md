@@ -1,6 +1,14 @@
-# Buddy Desktop Pet 🐱
+# Buddy Desktop Pet
 
-A Windows-95-Neko-style desktop pet for Ubuntu/GNOME — based on a real cat named Buddy.
+*In memory of Buddy — a good cat, gone too soon. June 18, 2026.*
+
+---
+
+A Windows-95-Neko-style desktop pet for Ubuntu/GNOME — built to keep Buddy's memory alive.
+
+Buddy was a real cat, one of four: Rambo, Buddy, Teddy, and Minnie. This project is a way
+to keep him around — sitting in the corner of the screen, stretching, napping in his bed,
+just like he always did.
 
 Buddy lives in the bottom-right corner of your screen. He sits, stretches, meows, plays,
 takes little strolls, and puts himself to bed. Fully transparent, always on top.
@@ -70,6 +78,6 @@ src/
 
 ## Credits
 
-- Buddy is a real cat 🐈
+- Buddy was a real cat, loved and missed
 - Sprite sheet generated with Gemini
 - Built with Python, GTK3, Cairo, Pillow, pygame
