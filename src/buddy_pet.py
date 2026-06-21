@@ -49,9 +49,9 @@ DUR = {
 }
 
 NEXT = {
-    "idle":     ["idle", "sit", "sit_left", "meow", "stretch", "jump", "wander", "play", "nap", "to_bed"],
-    "sit":      ["idle", "idle", "sit_left", "stretch", "meow", "wander", "play", "nap"],
-    "sit_left": ["idle", "idle", "sit", "stretch", "meow", "wander", "play", "nap"],
+    "idle":     ["idle", "sit", "sit_left", "stretch", "jump", "wander", "play", "nap", "to_bed"],
+    "sit":      ["idle", "idle", "sit_left", "stretch", "wander", "play", "nap"],
+    "sit_left": ["idle", "idle", "sit", "stretch", "wander", "play", "nap"],
     "stretch":  ["idle", "sit", "wander", "nap"],
     "meow":     ["idle"],
     "jump":     ["idle", "play"],
