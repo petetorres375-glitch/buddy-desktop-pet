@@ -272,6 +272,9 @@ class BuddyWindow(Gtk.Window):
             self.wander_ty = self.bed.bed_cy + math.sin(angle) * dist
         elif new_state == "play":
             self.facing_right = random.choice([True, False])
+        elif new_state == "eat":
+            self.facing_right = self.cat_x < self.bowl.bowl_cx
+
 
     def _walk_toward(self, tx: float, ty: float) -> float:
         dx, dy = tx - self.cat_x, ty - self.cat_y
@@ -308,12 +311,15 @@ class BuddyWindow(Gtk.Window):
                 self._enter("sleeping")
 
         elif self.state == "to_bowl":
-            if self._walk_toward(self.bowl.bowl_cx, self.bowl.bowl_cy) < 50:
+            eat_x = self.bowl.bowl_cx
+            eat_y = self.bowl.bowl_cy - 70
+
+            if self._walk_toward(eat_x, eat_y) < 15:
                 self._enter("eat")
 
         if self.state == "eat":
-            phase = (self.state_ms % 600) / 600.0
-            self.eat_bob_px = int(18 * max(0, math.sin(phase * math.pi * 2)))
+            phase = (self.state_ms % 500) / 500.0
+            self.eat_bob_px = int(6 * max(0, math.sin(phase * math.pi * 2)))
 
         if self.state_ms >= self.state_dur and self.state not in ("to_bed", "to_bowl"):
             self._enter(self._pick_next())
