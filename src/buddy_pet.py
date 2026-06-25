@@ -32,7 +32,6 @@ ANIM_WALK_MS  = 90
 ANIM_SLOW_MS  = 350
 BED_MARGIN_X  = 120   # from right edge
 BED_MARGIN_Y  = 20    # from bottom edge
-BOWL_MARGIN_X = 120   # from left edge
 BOWL_MARGIN_Y = 20    # from bottom edge
 EDGE_MARGIN   = 60
 HOME_RADIUS   = 150   # Buddy stays within this many px of his bed
@@ -170,7 +169,7 @@ class BowlWindow(Gtk.Window):
         self.set_resizable(False)
         pb = load_pixbuf(ASSETS / "bowl.png", BOWL_SIZE)
         w, h = pb.get_width(), pb.get_height()
-        bx = mon_x + BOWL_MARGIN_X
+        bx = mon_x + mon_w - BED_MARGIN_X - BED_SIZE - 20 - w
         by = mon_y + mon_h - BOWL_MARGIN_Y - h
         self.bowl_cx = float(bx + w // 2)
         self.bowl_cy = float(by + h // 2)
