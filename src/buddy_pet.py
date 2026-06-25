@@ -24,6 +24,7 @@ FRAMES_DIR = ASSETS / "frames"
 
 SPRITE_SIZE   = 150
 BED_SIZE      = 130
+BOWL_SIZE     = 80
 SPEED         = 2.5
 TICK_MS       = 30
 ANIM_IDLE_MS  = 220
@@ -31,6 +32,8 @@ ANIM_WALK_MS  = 90
 ANIM_SLOW_MS  = 350
 BED_MARGIN_X  = 120   # from right edge
 BED_MARGIN_Y  = 20    # from bottom edge
+BOWL_MARGIN_X = 120   # from left edge
+BOWL_MARGIN_Y = 20    # from bottom edge
 EDGE_MARGIN   = 60
 HOME_RADIUS   = 150   # Buddy stays within this many px of his bed
 PURR_RADIUS   = 200   # mouse within this many px → Buddy purrs
@@ -46,20 +49,23 @@ DUR = {
     "play":      (2000, 4000),
     "nap":       (8000, 20000),
     "sleeping":  (30000, 60000),
+    "eat":       (5000, 12000),
 }
 
 NEXT = {
-    "idle":     ["idle", "sit", "sit_left", "stretch", "jump", "wander", "play", "nap", "to_bed"],
-    "sit":      ["idle", "idle", "sit_left", "stretch", "wander", "play", "nap"],
-    "sit_left": ["idle", "idle", "sit", "stretch", "wander", "play", "nap"],
+    "idle":     ["idle", "sit", "sit_left", "stretch", "jump", "wander", "play", "nap", "to_bed", "to_bowl", "to_bowl"],
+    "sit":      ["idle", "idle", "sit_left", "stretch", "wander", "play", "nap", "to_bowl"],
+    "sit_left": ["idle", "idle", "sit", "stretch", "wander", "play", "nap", "to_bowl"],
     "stretch":  ["idle", "sit", "wander", "nap"],
     "meow":     ["idle"],
     "jump":     ["idle", "play"],
-    "wander":   ["idle", "sit", "sit_left"],
+    "wander":   ["idle", "sit", "sit_left", "to_bowl"],
     "play":     ["idle", "sit", "jump"],
     "nap":      ["idle", "sit", "stretch"],
     "sleeping": ["idle"],
     "to_bed":   ["sleeping"],
+    "to_bowl":  ["eat"],
+    "eat":      ["idle", "wander", "sit"],
 }
 
 
@@ -152,10 +158,42 @@ class BedWindow(Gtk.Window):
         cr.paint()
 
 
+class BowlWindow(Gtk.Window):
+    def __init__(self, mon_x: int, mon_y: int, mon_w: int, mon_h: int):
+        super().__init__()
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual: self.set_visual(visual)
+        self.set_app_paintable(True)
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_resizable(False)
+        pb = load_pixbuf(ASSETS / "bowl.png", BOWL_SIZE)
+        w, h = pb.get_width(), pb.get_height()
+        bx = mon_x + BOWL_MARGIN_X
+        by = mon_y + mon_h - BOWL_MARGIN_Y - h
+        self.bowl_cx = float(bx + w // 2)
+        self.bowl_cy = float(by + h // 2)
+        self.set_default_size(w, h)
+        self.move(bx, by)
+        self._pb = pb
+        da = Gtk.DrawingArea()
+        da.set_size_request(w, h)
+        da.connect("draw", self._draw)
+        self.add(da)
+
+    def _draw(self, widget, cr):
+        cr.set_operator(0); cr.paint()
+        cr.set_operator(2)
+        Gdk.cairo_set_source_pixbuf(cr, self._pb, 0, 0)
+        cr.paint()
+
+
 class BuddyWindow(Gtk.Window):
-    def __init__(self, bed: BedWindow, mon_x: int, mon_y: int, mon_w: int, mon_h: int):
+    def __init__(self, bed: BedWindow, bowl: BowlWindow, mon_x: int, mon_y: int, mon_w: int, mon_h: int):
         super().__init__()
         self.bed      = bed
+        self.bowl     = bowl
         self.mon_x    = mon_x
         self.mon_y    = mon_y
         self.screen_w = mon_w
@@ -183,6 +221,7 @@ class BuddyWindow(Gtk.Window):
         self.walk_angle   = 0.0
         self.wander_tx    = self.cat_x
         self.wander_ty    = self.cat_y
+        self.eat_bob_px   = 0
 
         self.win_w = SPRITE_SIZE + 20
         self.win_h = SPRITE_SIZE + 20
@@ -220,8 +259,10 @@ class BuddyWindow(Gtk.Window):
         self.state_dur  = self._random_dur(new_state)
         self.anim_frame = 0
         self.anim_ms    = 0
+        if new_state != "eat":
+            self.eat_bob_px = 0
 
-        if new_state == "to_bed":
+        if new_state in ("to_bed", "to_bowl"):
             self.state_dur = 999999
         elif new_state == "meow":
             play_meow()
@@ -267,12 +308,21 @@ class BuddyWindow(Gtk.Window):
             if self._walk_toward(self.bed.bed_cx, self.bed.bed_cy) < 45:
                 self._enter("sleeping")
 
-        if self.state_ms >= self.state_dur and self.state != "to_bed":
+        elif self.state == "to_bowl":
+            if self._walk_toward(self.bowl.bowl_cx, self.bowl.bowl_cy) < 50:
+                self._enter("eat")
+
+        if self.state == "eat":
+            phase = (self.state_ms % 600) / 600.0
+            self.eat_bob_px = int(18 * max(0, math.sin(phase * math.pi * 2)))
+
+        if self.state_ms >= self.state_dur and self.state not in ("to_bed", "to_bowl"):
             self._enter(self._pick_next())
 
         ms_per_frame = {
             "wander":   ANIM_WALK_MS,
             "to_bed":   ANIM_WALK_MS,
+            "to_bowl":  ANIM_WALK_MS,
             "jump":     120,
             "sleeping": ANIM_SLOW_MS,
             "nap":      ANIM_SLOW_MS,
@@ -280,6 +330,7 @@ class BuddyWindow(Gtk.Window):
             "sit_left": ANIM_SLOW_MS,
             "stretch":  ANIM_SLOW_MS,
             "play":     450,
+            "eat":      150,
         }.get(self.state, ANIM_IDLE_MS)
 
         self.anim_ms += TICK_MS
@@ -309,9 +360,11 @@ class BuddyWindow(Gtk.Window):
         if self.state == "sit_left": return ANIMS["sit_left"]
         if self.state == "stretch":  return ANIMS["stretch"]
         if self.state == "jump":     return ANIMS["jump"]
+        if self.state == "eat":
+            return ANIMS["sit"] if self.facing_right else ANIMS["sit_left"]
         if self.state == "play":
             return ANIMS["play"]
-        if self.state in ("wander", "to_bed"):
+        if self.state in ("wander", "to_bed", "to_bowl"):
             return ANIMS["walk"] if self.facing_right else ANIMS["walk_left"]
         return ANIMS["idle"]
 
@@ -321,7 +374,7 @@ class BuddyWindow(Gtk.Window):
         frames = self._current_frames()
         pb = frames[min(self.anim_frame, len(frames) - 1)]
         ox = (self.win_w - pb.get_width())  // 2
-        oy = (self.win_h - pb.get_height()) // 2
+        oy = (self.win_h - pb.get_height()) // 2 + self.eat_bob_px
         Gdk.cairo_set_source_pixbuf(cr, pb, ox, oy)
         cr.paint()
 
@@ -343,9 +396,11 @@ mx, my   = geom.x, geom.y          # monitor top-left offset
 mw, mh   = geom.width, geom.height  # monitor dimensions
 
 bed   = BedWindow(mx, my, mw, mh)
-buddy = BuddyWindow(bed, mx, my, mw, mh)
+bowl  = BowlWindow(mx, my, mw, mh)
+buddy = BuddyWindow(bed, bowl, mx, my, mw, mh)
 
 bed.show_all()
+bowl.show_all()
 buddy.show_all()
 
 Gtk.main()
