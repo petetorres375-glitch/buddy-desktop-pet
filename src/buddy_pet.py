@@ -25,11 +25,12 @@ FRAMES_DIR = ASSETS / "frames"
 SPRITE_SIZE   = 150
 BED_SIZE      = 130
 BOWL_SIZE     = 80
-SPEED         = 2.5
+SPEED         = 1.8          # slower walk → more cartoon-like
 TICK_MS       = 30
-ANIM_IDLE_MS  = 220
-ANIM_WALK_MS  = 90
-ANIM_SLOW_MS  = 350
+ANIM_IDLE_MS  = 320          # idle breathing is lazier
+ANIM_WALK_MS  = 130          # walk cycle slowed down
+ANIM_SLOW_MS  = 500          # sleep/sit even more relaxed
+ANIM_EAT_MS   = 220          # eat head-bob speed
 BED_MARGIN_X  = 120   # from right edge
 BED_MARGIN_Y  = 20    # from bottom edge
 BOWL_MARGIN_Y = 20    # from bottom edge
@@ -92,10 +93,12 @@ ANIMS = {
     "stretch": load_anim("stretch", 3),
     "jump":    load_anim("jump",    4),
     "play":    load_anim("play",    3),
+    "eat":     load_anim("eat",     4),   # dedicated eating frames
 }
 ANIMS["walk_left"] = [pb.flip(True) for pb in ANIMS["walk"]]
 ANIMS["sit_left"]  = [pb.flip(True) for pb in ANIMS["sit"]]
 ANIMS["play_left"] = [pb.flip(True) for pb in ANIMS["play"]]
+ANIMS["eat_left"]  = [pb.flip(True) for pb in ANIMS["eat"]]
 
 pygame.mixer.init()
 purr_sound = meow_sound = None
@@ -169,7 +172,8 @@ class BowlWindow(Gtk.Window):
         self.set_resizable(False)
         pb = load_pixbuf(ASSETS / "bowl.png", BOWL_SIZE)
         w, h = pb.get_width(), pb.get_height()
-        bx = mon_x + mon_w - BED_MARGIN_X - BED_SIZE - 20 - w
+        # Bowl sits in front of (left of) the bed, aligned to same bottom edge
+        bx = mon_x + mon_w - BED_MARGIN_X - w - 10
         by = mon_y + mon_h - BOWL_MARGIN_Y - h
         self.bowl_cx = float(bx + w // 2)
         self.bowl_cy = float(by + h // 2)
@@ -272,9 +276,9 @@ class BuddyWindow(Gtk.Window):
             self.wander_ty = self.bed.bed_cy + math.sin(angle) * dist
         elif new_state == "play":
             self.facing_right = random.choice([True, False])
+
         elif new_state == "eat":
             self.facing_right = self.cat_x < self.bowl.bowl_cx
-
 
     def _walk_toward(self, tx: float, ty: float) -> float:
         dx, dy = tx - self.cat_x, ty - self.cat_y
@@ -318,8 +322,9 @@ class BuddyWindow(Gtk.Window):
                 self._enter("eat")
 
         if self.state == "eat":
-            phase = (self.state_ms % 500) / 500.0
-            self.eat_bob_px = int(6 * max(0, math.sin(phase * math.pi * 2)))
+            # Slower, deeper bob — head dips down toward bowl every ~700ms
+            phase = (self.state_ms % 700) / 700.0
+            self.eat_bob_px = int(14 * max(0, math.sin(phase * math.pi)))
 
         if self.state_ms >= self.state_dur and self.state not in ("to_bed", "to_bowl"):
             self._enter(self._pick_next())
@@ -328,14 +333,14 @@ class BuddyWindow(Gtk.Window):
             "wander":   ANIM_WALK_MS,
             "to_bed":   ANIM_WALK_MS,
             "to_bowl":  ANIM_WALK_MS,
-            "jump":     120,
+            "jump":     150,
             "sleeping": ANIM_SLOW_MS,
             "nap":      ANIM_SLOW_MS,
             "sit":      ANIM_SLOW_MS,
             "sit_left": ANIM_SLOW_MS,
             "stretch":  ANIM_SLOW_MS,
-            "play":     450,
-            "eat":      150,
+            "play":     500,
+            "eat":      ANIM_EAT_MS,
         }.get(self.state, ANIM_IDLE_MS)
 
         self.anim_ms += TICK_MS
@@ -366,7 +371,7 @@ class BuddyWindow(Gtk.Window):
         if self.state == "stretch":  return ANIMS["stretch"]
         if self.state == "jump":     return ANIMS["jump"]
         if self.state == "eat":
-            return ANIMS["sit"] if self.facing_right else ANIMS["sit_left"]
+            return ANIMS["eat"] if self.facing_right else ANIMS["eat_left"]
         if self.state == "play":
             return ANIMS["play"]
         if self.state in ("wander", "to_bed", "to_bowl"):
